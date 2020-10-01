@@ -187,6 +187,22 @@ int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char 
 
 void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
 {
+	// NOTE:
+	// 	applications that handle TrueType fonts with native hinting must be aware that TTFs expect different rounding of vertical font dimensions.
+	// 	The application has to cater for this, especially if it wants to rely on a TTF's vertical data (for example, to properly align box characters vertically)
+	//	Only the application knows in advance that it is going to use native hinting for TTFs! FreeType, on the other hand, selects the hinting mode not at the time of creating an FT_Size object but much later, namely while calling FT_Load_Glyph.
+	// 	https://www.freetype.org/freetype2/docs/reference/ft2-base_interface.html#ft_size_metrics
+	// const char* font_format = FT_Get_Font_Format( face );
+	// if (!strcmp( font_format, "TrueType" ) && do_native_bytecode_hinting) {
+	// 	*ascender  = ROUND( FT_MulFix( face->ascender, size_metrics->y_scale ) );
+	// 	*descender = ROUND( FT_MulFix( face->descender,
+	// 									size_metrics->y_scale ) );
+	// 	}
+	// 	else
+	// 	{
+	// 		ascender  = size_metrics->ascender;
+	// 		descender = size_metrics->descender;
+	// 	}
 	*ascent = font->font->ascender;
 	*descent = font->font->descender;
 	*lineGap = font->font->height - (*ascent - *descent);
@@ -199,6 +215,9 @@ float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
 
 int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
 {
+	// codepoint: use UTF-32 representation of Unicode; load character U+1F028 w/ value 0x1F028
+	// If no charmap was selected, the function returns the charcode.
+	// when a given character code has no glyph image in the face, value 0 is returned. By convention, it always corresponds to a special glyph image called the missing glyph, which is commonly displayed as a box or a space.
 	return FT_Get_Char_Index(font->font, codepoint);
 }
 
@@ -212,7 +231,7 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 
 	ftError = FT_Set_Pixel_Sizes(font->font, 0, size);
 	if (ftError) return 0;
-	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT);
 	if (ftError) return 0;
 	ftError = FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advFixed);
 	if (ftError) return 0;

@@ -6,7 +6,7 @@
 #  include <GL/glew.h>
 #endif
 #include <GLFW/glfw3.h>
-#include "nanovg.h"
+#include "nanovg/src/nanovg.h"
 
 #ifdef _MSC_VER
 #define snprintf _snprintf

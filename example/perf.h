@@ -1,7 +1,7 @@
 #ifndef PERF_H
 #define PERF_H
 
-#include "nanovg.h"
+#include "nanovg/src/nanovg.h"
 
 #ifdef __cplusplus
 extern "C" {
