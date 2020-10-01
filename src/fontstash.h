@@ -147,9 +147,13 @@ void fonsDrawDebug(FONScontext* s, float x, float y);
 
 #ifdef FONS_USE_FREETYPE
 
-#include <ft2build.h>
+// #include "nanovg/src/freetype/ft2build.h"
+#include "ft2build.h"
 #include FT_FREETYPE_H
 #include FT_ADVANCES_H
+// #include FT_LCD_FILTER_H
+
+
 #include <math.h>
 
 struct FONSttFontImpl {
@@ -164,6 +168,17 @@ int fons__tt_init(FONScontext *context)
 	FT_Error ftError;
 	FONS_NOTUSED(context);
 	ftError = FT_Init_FreeType(&ftLibrary);
+
+	// https://www.freetype.org/freetype2/docs/reference/ft2-lcd_rendering.html#ft_library_setlcdfilter
+	//  FT_LCD_FILTER_LIGHT
+	// if (FT_Library_SetLcdFilter(ftLibrary, FT_LCD_FILTER_DEFAULT) != 0) {
+	// 	#ifdef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
+	// 		printf("FT_CONFIG_OPTION_SUBPIXEL_RENDERING is defined?? %i \n",FT_Library_SetLcdFilter(ftLibrary, FT_LCD_FILTER_DEFAULT));
+	// 	#endif
+	// 	printf("FT_CONFIG_OPTION_SUBPIXEL_RENDERING not defined!\n");
+	// 	// exit(1);
+	// }
+
 	return ftError == 0;
 }
 
@@ -233,6 +248,8 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 	if (ftError) return 0;
 	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT);
 	if (ftError) return 0;
+	// ftError = FT_Render_Glyph(font->font->glyph, FT_RENDER_MODE_LCD);
+	// if (ftError) return 0;
 	ftError = FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advFixed);
 	if (ftError) return 0;
 	ftGlyph = font->font->glyph;
