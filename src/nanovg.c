@@ -24,8 +24,8 @@
 #include "nanovg.h"
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define  STB_IMAGE_IMPLEMENTATION
+#include STB_IMAGE__H
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4100)  // unreferenced formal parameter
@@ -109,7 +109,7 @@ struct NVGpathCache {
 };
 typedef struct NVGpathCache NVGpathCache;
 
-struct NVGcontext {
+struct vg_t {
 	NVGparams params;
 	float* commands;
 	int ccommands;
@@ -197,7 +197,7 @@ error:
 	return NULL;
 }
 
-static void nvg__setDevicePixelRatio(NVGcontext* ctx, float ratio)
+static void nvg__setDevicePixelRatio(vg_t* ctx, float ratio)
 {
 	ctx->tessTol = 0.25f / ratio;
 	ctx->distTol = 0.01f / ratio;
@@ -278,18 +278,18 @@ static NVGcompositeOperationState nvg__compositeOperationState(int op)
 	return state;
 }
 
-static NVGstate* nvg__getState(NVGcontext* ctx)
+static NVGstate* nvg__getState(vg_t* ctx)
 {
 	return &ctx->states[ctx->nstates-1];
 }
 
-NVGcontext* nvgCreateInternal(NVGparams* params)
+vg_t* nvgCreateInternal(NVGparams* params)
 {
 	FONSparams fontParams;
-	NVGcontext* ctx = (NVGcontext*)malloc(sizeof(NVGcontext));
+	vg_t* ctx = (vg_t*)malloc(sizeof(vg_t));
 	int i;
 	if (ctx == NULL) goto error;
-	memset(ctx, 0, sizeof(NVGcontext));
+	memset(ctx, 0, sizeof(vg_t));
 
 	ctx->params = *params;
 	for (i = 0; i < NVG_MAX_FONTIMAGES; i++)
@@ -335,12 +335,12 @@ error:
 	return 0;
 }
 
-NVGparams* nvgInternalParams(NVGcontext* ctx)
+NVGparams* nvgInternalParams(vg_t* ctx)
 {
     return &ctx->params;
 }
 
-void nvgDeleteInternal(NVGcontext* ctx)
+void nvgDeleteInternal(vg_t* ctx)
 {
 	int i;
 	if (ctx == NULL) return;
@@ -363,7 +363,7 @@ void nvgDeleteInternal(NVGcontext* ctx)
 	free(ctx);
 }
 
-void nvgBeginFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio)
+void nvgBeginFrame(vg_t* ctx, float windowWidth, float windowHeight, float devicePixelRatio)
 {
 /*	printf("Tris: draws:%d  fill:%d  stroke:%d  text:%d  TOT:%d\n",
 		ctx->drawCallCount, ctx->fillTriCount, ctx->strokeTriCount, ctx->textTriCount,
@@ -383,12 +383,12 @@ void nvgBeginFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float
 	ctx->textTriCount = 0;
 }
 
-void nvgCancelFrame(NVGcontext* ctx)
+void nvgCancelFrame(vg_t* ctx)
 {
 	ctx->params.renderCancel(ctx->params.userPtr);
 }
 
-void nvgEndFrame(NVGcontext* ctx)
+void nvgEndFrame(vg_t* ctx)
 {
 	ctx->params.renderFlush(ctx->params.userPtr);
 	if (ctx->fontImageIdx != 0) {
@@ -622,7 +622,7 @@ static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 
 
 // State handling
-void nvgSave(NVGcontext* ctx)
+void nvgSave(vg_t* ctx)
 {
 	if (ctx->nstates >= NVG_MAX_STATES)
 		return;
@@ -631,14 +631,14 @@ void nvgSave(NVGcontext* ctx)
 	ctx->nstates++;
 }
 
-void nvgRestore(NVGcontext* ctx)
+void nvgRestore(vg_t* ctx)
 {
 	if (ctx->nstates <= 1)
 		return;
 	ctx->nstates--;
 }
 
-void nvgReset(NVGcontext* ctx)
+void nvgReset(vg_t* ctx)
 {
 	NVGstate* state = nvg__getState(ctx);
 	memset(state, 0, sizeof(*state));
@@ -666,56 +666,56 @@ void nvgReset(NVGcontext* ctx)
 }
 
 // State setting
-void nvgShapeAntiAlias(NVGcontext* ctx, int enabled)
+void nvgShapeAntiAlias(vg_t* ctx, int enabled)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->shapeAntiAlias = enabled;
 }
 
-void nvgStrokeWidth(NVGcontext* ctx, float width)
+void nvgStrokeWidth(vg_t* ctx, float width)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->strokeWidth = width;
 }
 
-void nvgMiterLimit(NVGcontext* ctx, float limit)
+void nvgMiterLimit(vg_t* ctx, float limit)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->miterLimit = limit;
 }
 
-void nvgLineCap(NVGcontext* ctx, int cap)
+void nvgLineCap(vg_t* ctx, int cap)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->lineCap = cap;
 }
 
-void nvgLineJoin(NVGcontext* ctx, int join)
+void nvgLineJoin(vg_t* ctx, int join)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->lineJoin = join;
 }
 
-void nvgGlobalAlpha(NVGcontext* ctx, float alpha)
+void nvgGlobalAlpha(vg_t* ctx, float alpha)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->alpha = alpha;
 }
 
-void nvgTransform(NVGcontext* ctx, float a, float b, float c, float d, float e, float f)
+void nvgTransform(vg_t* ctx, float a, float b, float c, float d, float e, float f)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6] = { a, b, c, d, e, f };
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgResetTransform(NVGcontext* ctx)
+void nvgResetTransform(vg_t* ctx)
 {
 	NVGstate* state = nvg__getState(ctx);
 	nvgTransformIdentity(state->xform);
 }
 
-void nvgTranslate(NVGcontext* ctx, float x, float y)
+void nvgTranslate(vg_t* ctx, float x, float y)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6];
@@ -723,7 +723,7 @@ void nvgTranslate(NVGcontext* ctx, float x, float y)
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgRotate(NVGcontext* ctx, float angle)
+void nvgRotate(vg_t* ctx, float angle)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6];
@@ -731,7 +731,7 @@ void nvgRotate(NVGcontext* ctx, float angle)
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgSkewX(NVGcontext* ctx, float angle)
+void nvgSkewX(vg_t* ctx, float angle)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6];
@@ -739,7 +739,7 @@ void nvgSkewX(NVGcontext* ctx, float angle)
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgSkewY(NVGcontext* ctx, float angle)
+void nvgSkewY(vg_t* ctx, float angle)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6];
@@ -747,7 +747,7 @@ void nvgSkewY(NVGcontext* ctx, float angle)
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgScale(NVGcontext* ctx, float x, float y)
+void nvgScale(vg_t* ctx, float x, float y)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float t[6];
@@ -755,40 +755,40 @@ void nvgScale(NVGcontext* ctx, float x, float y)
 	nvgTransformPremultiply(state->xform, t);
 }
 
-void nvgCurrentTransform(NVGcontext* ctx, float* xform)
+void nvgCurrentTransform(vg_t* ctx, float* xform)
 {
 	NVGstate* state = nvg__getState(ctx);
 	if (xform == NULL) return;
 	memcpy(xform, state->xform, sizeof(float)*6);
 }
 
-void nvgStrokeColor(NVGcontext* ctx, NVGcolor color)
+void nvgStrokeColor(vg_t* ctx, NVGcolor color)
 {
 	NVGstate* state = nvg__getState(ctx);
 	nvg__setPaintColor(&state->stroke, color);
 }
 
-void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint)
+void nvgStrokePaint(vg_t* ctx, NVGpaint paint)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->stroke = paint;
 	nvgTransformMultiply(state->stroke.xform, state->xform);
 }
 
-void nvgFillColor(NVGcontext* ctx, NVGcolor color)
+void nvgFillColor(vg_t* ctx, NVGcolor color)
 {
 	NVGstate* state = nvg__getState(ctx);
 	nvg__setPaintColor(&state->fill, color);
 }
 
-void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
+void nvgFillPaint(vg_t* ctx, NVGpaint paint)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->fill = paint;
 	nvgTransformMultiply(state->fill.xform, state->xform);
 }
 
-int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
+int nvgCreateImage(vg_t* ctx, const char* filename, int imageFlags)
 {
 	int w, h, n, image;
 	unsigned char* img;
@@ -804,7 +804,7 @@ int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
 	return image;
 }
 
-int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata)
+int nvgCreateImageMem(vg_t* ctx, int imageFlags, unsigned char* data, int ndata)
 {
 	int w, h, n, image;
 	unsigned char* img = stbi_load_from_memory(data, ndata, &w, &h, &n, 4);
@@ -817,29 +817,38 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 	return image;
 }
 
-int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data)
+int nvgCreateImageRGBA(vg_t* ctx, int w, int h, int imageFlags, const unsigned char* data)
 {
 	return ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_RGBA, w, h, imageFlags, data);
 }
 
-void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data)
+void nvgUpdateImage(vg_t* ctx, int image, const unsigned char* data)
 {
 	int w, h;
 	ctx->params.renderGetTextureSize(ctx->params.userPtr, image, &w, &h);
 	ctx->params.renderUpdateTexture(ctx->params.userPtr, image, 0,0, w,h, data);
 }
 
-void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h)
+void nvgImageSize(vg_t* ctx, int image, int* w, int* h)
 {
 	ctx->params.renderGetTextureSize(ctx->params.userPtr, image, w, h);
 }
 
-void nvgDeleteImage(NVGcontext* ctx, int image)
+void vg_img_free(vg_t* ctx, int image)
 {
 	ctx->params.renderDeleteTexture(ctx->params.userPtr, image);
 }
 
-NVGpaint nvgLinearGradient(NVGcontext* ctx,
+void vg_img_delete(vg_t* ctx, int* img)
+{
+    if (*img < 0)
+        return;
+    vg_img_free(ctx, *img);
+    *img = -1;
+}
+
+
+NVGpaint nvgLinearGradient(vg_t* ctx,
 								  float sx, float sy, float ex, float ey,
 								  NVGcolor icol, NVGcolor ocol)
 {
@@ -878,7 +887,7 @@ NVGpaint nvgLinearGradient(NVGcontext* ctx,
 	return p;
 }
 
-NVGpaint nvgRadialGradient(NVGcontext* ctx,
+NVGpaint nvgRadialGradient(vg_t* ctx,
 								  float cx, float cy, float inr, float outr,
 								  NVGcolor icol, NVGcolor ocol)
 {
@@ -905,7 +914,7 @@ NVGpaint nvgRadialGradient(NVGcontext* ctx,
 	return p;
 }
 
-NVGpaint nvgBoxGradient(NVGcontext* ctx,
+NVGpaint nvgBoxGradient(vg_t* ctx,
 							   float x, float y, float w, float h, float r, float f,
 							   NVGcolor icol, NVGcolor ocol)
 {
@@ -931,7 +940,7 @@ NVGpaint nvgBoxGradient(NVGcontext* ctx,
 }
 
 
-NVGpaint nvgImagePattern(NVGcontext* ctx,
+NVGpaint nvgImagePattern(vg_t* ctx,
 								float cx, float cy, float w, float h, float angle,
 								int image, float alpha)
 {
@@ -954,7 +963,7 @@ NVGpaint nvgImagePattern(NVGcontext* ctx,
 }
 
 // Scissoring
-void nvgScissor(NVGcontext* ctx, float x, float y, float w, float h)
+void nvgScissor(vg_t* ctx, float x, float y, float w, float h)
 {
 	NVGstate* state = nvg__getState(ctx);
 
@@ -984,7 +993,7 @@ static void nvg__isectRects(float* dst,
 	dst[3] = nvg__maxf(0.0f, maxy - miny);
 }
 
-void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
+void nvgIntersectScissor(vg_t* ctx, float x, float y, float w, float h)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float pxform[6], invxorm[6];
@@ -1013,7 +1022,7 @@ void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
 	nvgScissor(ctx, rect[0], rect[1], rect[2], rect[3]);
 }
 
-void nvgResetScissor(NVGcontext* ctx)
+void nvgResetScissor(vg_t* ctx)
 {
 	NVGstate* state = nvg__getState(ctx);
 	memset(state->scissor.xform, 0, sizeof(state->scissor.xform));
@@ -1022,18 +1031,18 @@ void nvgResetScissor(NVGcontext* ctx)
 }
 
 // Global composite operation.
-void nvgGlobalCompositeOperation(NVGcontext* ctx, int op)
+void nvgGlobalCompositeOperation(vg_t* ctx, int op)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->compositeOperation = nvg__compositeOperationState(op);
 }
 
-void nvgGlobalCompositeBlendFunc(NVGcontext* ctx, int sfactor, int dfactor)
+void nvgGlobalCompositeBlendFunc(vg_t* ctx, int sfactor, int dfactor)
 {
 	nvgGlobalCompositeBlendFuncSeparate(ctx, sfactor, dfactor, sfactor, dfactor);
 }
 
-void nvgGlobalCompositeBlendFuncSeparate(NVGcontext* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha)
+void nvgGlobalCompositeBlendFuncSeparate(vg_t* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha)
 {
 	NVGcompositeOperationState op;
 	op.srcRGB = srcRGB;
@@ -1069,7 +1078,7 @@ static float nvg__distPtSeg(float x, float y, float px, float py, float qx, floa
 	return dx*dx + dy*dy;
 }
 
-static void nvg__appendCommands(NVGcontext* ctx, float* vals, int nvals)
+static void nvg__appendCommands(vg_t* ctx, float* vals, int nvals)
 {
 	NVGstate* state = nvg__getState(ctx);
 	int i;
@@ -1124,20 +1133,20 @@ static void nvg__appendCommands(NVGcontext* ctx, float* vals, int nvals)
 }
 
 
-static void nvg__clearPathCache(NVGcontext* ctx)
+static void nvg__clearPathCache(vg_t* ctx)
 {
 	ctx->cache->npoints = 0;
 	ctx->cache->npaths = 0;
 }
 
-static NVGpath* nvg__lastPath(NVGcontext* ctx)
+static NVGpath* nvg__lastPath(vg_t* ctx)
 {
 	if (ctx->cache->npaths > 0)
 		return &ctx->cache->paths[ctx->cache->npaths-1];
 	return NULL;
 }
 
-static void nvg__addPath(NVGcontext* ctx)
+static void nvg__addPath(vg_t* ctx)
 {
 	NVGpath* path;
 	if (ctx->cache->npaths+1 > ctx->cache->cpaths) {
@@ -1156,14 +1165,14 @@ static void nvg__addPath(NVGcontext* ctx)
 	ctx->cache->npaths++;
 }
 
-static NVGpoint* nvg__lastPoint(NVGcontext* ctx)
+static NVGpoint* nvg__lastPoint(vg_t* ctx)
 {
 	if (ctx->cache->npoints > 0)
 		return &ctx->cache->points[ctx->cache->npoints-1];
 	return NULL;
 }
 
-static void nvg__addPoint(NVGcontext* ctx, float x, float y, int flags)
+static void nvg__addPoint(vg_t* ctx, float x, float y, int flags)
 {
 	NVGpath* path = nvg__lastPath(ctx);
 	NVGpoint* pt;
@@ -1196,14 +1205,14 @@ static void nvg__addPoint(NVGcontext* ctx, float x, float y, int flags)
 	path->count++;
 }
 
-static void nvg__closePath(NVGcontext* ctx)
+static void nvg__closePath(vg_t* ctx)
 {
 	NVGpath* path = nvg__lastPath(ctx);
 	if (path == NULL) return;
 	path->closed = 1;
 }
 
-static void nvg__pathWinding(NVGcontext* ctx, int winding)
+static void nvg__pathWinding(vg_t* ctx, int winding)
 {
 	NVGpath* path = nvg__lastPath(ctx);
 	if (path == NULL) return;
@@ -1217,7 +1226,7 @@ static float nvg__getAverageScale(float *t)
 	return (sx + sy) * 0.5f;
 }
 
-static NVGvertex* nvg__allocTempVerts(NVGcontext* ctx, int nverts)
+static NVGvertex* nvg__allocTempVerts(vg_t* ctx, int nverts)
 {
 	if (nverts > ctx->cache->cverts) {
 		NVGvertex* verts;
@@ -1275,7 +1284,7 @@ static void nvg__vset(NVGvertex* vtx, float x, float y, float u, float v)
 	vtx->v = v;
 }
 
-static void nvg__tesselateBezier(NVGcontext* ctx,
+static void nvg__tesselateBezier(vg_t* ctx,
 								 float x1, float y1, float x2, float y2,
 								 float x3, float y3, float x4, float y4,
 								 int level, int type)
@@ -1318,7 +1327,7 @@ static void nvg__tesselateBezier(NVGcontext* ctx,
 	nvg__tesselateBezier(ctx, x1234,y1234, x234,y234, x34,y34, x4,y4, level+1, type);
 }
 
-static void nvg__flattenPaths(NVGcontext* ctx)
+static void nvg__flattenPaths(vg_t* ctx)
 {
 	NVGpathCache* cache = ctx->cache;
 //	NVGstate* state = nvg__getState(ctx);
@@ -1647,7 +1656,7 @@ static NVGvertex* nvg__roundCapEnd(NVGvertex* dst, NVGpoint* p,
 }
 
 
-static void nvg__calculateJoins(NVGcontext* ctx, float w, int lineJoin, float miterLimit)
+static void nvg__calculateJoins(vg_t* ctx, float w, int lineJoin, float miterLimit)
 {
 	NVGpathCache* cache = ctx->cache;
 	int i, j;
@@ -1717,7 +1726,7 @@ static void nvg__calculateJoins(NVGcontext* ctx, float w, int lineJoin, float mi
 }
 
 
-static int nvg__expandStroke(NVGcontext* ctx, float w, float fringe, int lineCap, int lineJoin, float miterLimit)
+static int nvg__expandStroke(vg_t* ctx, float w, float fringe, int lineCap, int lineJoin, float miterLimit)
 {
 	NVGpathCache* cache = ctx->cache;
 	NVGvertex* verts;
@@ -1841,7 +1850,7 @@ static int nvg__expandStroke(NVGcontext* ctx, float w, float fringe, int lineCap
 	return 1;
 }
 
-static int nvg__expandFill(NVGcontext* ctx, float w, int lineJoin, float miterLimit)
+static int nvg__expandFill(vg_t* ctx, float w, int lineJoin, float miterLimit)
 {
 	NVGpathCache* cache = ctx->cache;
 	NVGvertex* verts;
@@ -1963,31 +1972,31 @@ static int nvg__expandFill(NVGcontext* ctx, float w, int lineJoin, float miterLi
 
 
 // Draw
-void nvgBeginPath(NVGcontext* ctx)
+void nvgBeginPath(vg_t* ctx)
 {
 	ctx->ncommands = 0;
 	nvg__clearPathCache(ctx);
 }
 
-void nvgMoveTo(NVGcontext* ctx, float x, float y)
+void nvgMoveTo(vg_t* ctx, float x, float y)
 {
 	float vals[] = { NVG_MOVETO, x, y };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgLineTo(NVGcontext* ctx, float x, float y)
+void nvgLineTo(vg_t* ctx, float x, float y)
 {
 	float vals[] = { NVG_LINETO, x, y };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgBezierTo(NVGcontext* ctx, float c1x, float c1y, float c2x, float c2y, float x, float y)
+void nvgBezierTo(vg_t* ctx, float c1x, float c1y, float c2x, float c2y, float x, float y)
 {
 	float vals[] = { NVG_BEZIERTO, c1x, c1y, c2x, c2y, x, y };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgQuadTo(NVGcontext* ctx, float cx, float cy, float x, float y)
+void nvgQuadTo(vg_t* ctx, float cx, float cy, float x, float y)
 {
     float x0 = ctx->commandx;
     float y0 = ctx->commandy;
@@ -1998,7 +2007,7 @@ void nvgQuadTo(NVGcontext* ctx, float cx, float cy, float x, float y)
     nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float radius)
+void nvgArcTo(vg_t* ctx, float x1, float y1, float x2, float y2, float radius)
 {
 	float x0 = ctx->commandx;
 	float y0 = ctx->commandy;
@@ -2054,19 +2063,19 @@ void nvgArcTo(NVGcontext* ctx, float x1, float y1, float x2, float y2, float rad
 	nvgArc(ctx, cx, cy, radius, a0, a1, dir);
 }
 
-void nvgClosePath(NVGcontext* ctx)
+void nvgClosePath(vg_t* ctx)
 {
 	float vals[] = { NVG_CLOSE };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgPathWinding(NVGcontext* ctx, int dir)
+void nvgPathWinding(vg_t* ctx, int dir)
 {
 	float vals[] = { NVG_WINDING, (float)dir };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgArc(NVGcontext* ctx, float cx, float cy, float r, float a0, float a1, int dir)
+void nvgArc(vg_t* ctx, float cx, float cy, float r, float a0, float a1, int dir)
 {
 	float a = 0, da = 0, hda = 0, kappa = 0;
 	float dx = 0, dy = 0, x = 0, y = 0, tanx = 0, tany = 0;
@@ -2131,7 +2140,7 @@ void nvgArc(NVGcontext* ctx, float cx, float cy, float r, float a0, float a1, in
 	nvg__appendCommands(ctx, vals, nvals);
 }
 
-void nvgRect(NVGcontext* ctx, float x, float y, float w, float h)
+void nvgRect(vg_t* ctx, float x, float y, float w, float h)
 {
 	float vals[] = {
 		NVG_MOVETO, x,y,
@@ -2143,12 +2152,12 @@ void nvgRect(NVGcontext* ctx, float x, float y, float w, float h)
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgRoundedRect(NVGcontext* ctx, float x, float y, float w, float h, float r)
+void nvgRoundedRect(vg_t* ctx, float x, float y, float w, float h, float r)
 {
 	nvgRoundedRectVarying(ctx, x, y, w, h, r, r, r, r);
 }
 
-void nvgRoundedRectVarying(NVGcontext* ctx, float x, float y, float w, float h, float radTopLeft, float radTopRight, float radBottomRight, float radBottomLeft)
+void nvgRoundedRectVarying(vg_t* ctx, float x, float y, float w, float h, float radTopLeft, float radTopRight, float radBottomRight, float radBottomLeft)
 {
 	if(radTopLeft < 0.1f && radTopRight < 0.1f && radBottomRight < 0.1f && radBottomLeft < 0.1f) {
 		nvgRect(ctx, x, y, w, h);
@@ -2176,7 +2185,7 @@ void nvgRoundedRectVarying(NVGcontext* ctx, float x, float y, float w, float h, 
 	}
 }
 
-void nvgEllipse(NVGcontext* ctx, float cx, float cy, float rx, float ry)
+void nvgEllipse(vg_t* ctx, float cx, float cy, float rx, float ry)
 {
 	float vals[] = {
 		NVG_MOVETO, cx-rx, cy,
@@ -2189,12 +2198,12 @@ void nvgEllipse(NVGcontext* ctx, float cx, float cy, float rx, float ry)
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 
-void nvgCircle(NVGcontext* ctx, float cx, float cy, float r)
+void nvgCircle(vg_t* ctx, float cx, float cy, float r)
 {
 	nvgEllipse(ctx, cx,cy, r,r);
 }
 
-void nvgDebugDumpPathCache(NVGcontext* ctx)
+void nvgDebugDumpPathCache(vg_t* ctx)
 {
 	const NVGpath* path;
 	int i, j;
@@ -2216,7 +2225,7 @@ void nvgDebugDumpPathCache(NVGcontext* ctx)
 	}
 }
 
-void nvgFill(NVGcontext* ctx)
+void nvgFill(vg_t* ctx)
 {
 	NVGstate* state = nvg__getState(ctx);
 	const NVGpath* path;
@@ -2245,7 +2254,7 @@ void nvgFill(NVGcontext* ctx)
 	}
 }
 
-void nvgStroke(NVGcontext* ctx)
+void nvgStroke(vg_t* ctx)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getAverageScale(state->xform);
@@ -2287,92 +2296,92 @@ void nvgStroke(NVGcontext* ctx)
 }
 
 // Add fonts
-int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename)
+int nvgCreateFont(vg_t* ctx, const char* name, const char* filename)
 {
 	return fonsAddFont(ctx->fs, name, filename, 0);
 }
 
-int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
+int nvgCreateFontAtIndex(vg_t* ctx, const char* name, const char* filename, const int fontIndex)
 {
 	return fonsAddFont(ctx->fs, name, filename, fontIndex);
 }
 
-int nvgCreateFontMem(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData)
+int nvgCreateFontMem(vg_t* ctx, const char* name, unsigned char* data, int ndata, int freeData)
 {
 	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, 0);
 }
 
-int nvgCreateFontMemAtIndex(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData, const int fontIndex)
+int nvgCreateFontMemAtIndex(vg_t* ctx, const char* name, unsigned char* data, int ndata, int freeData, const int fontIndex)
 {
 	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, fontIndex);
 }
 
-int nvgFindFont(NVGcontext* ctx, const char* name)
+int nvgFindFont(vg_t* ctx, const char* name)
 {
 	if (name == NULL) return -1;
 	return fonsGetFontByName(ctx->fs, name);
 }
 
 
-int nvgAddFallbackFontId(NVGcontext* ctx, int baseFont, int fallbackFont)
+int nvgAddFallbackFontId(vg_t* ctx, int baseFont, int fallbackFont)
 {
 	if(baseFont == -1 || fallbackFont == -1) return 0;
 	return fonsAddFallbackFont(ctx->fs, baseFont, fallbackFont);
 }
 
-int nvgAddFallbackFont(NVGcontext* ctx, const char* baseFont, const char* fallbackFont)
+int nvgAddFallbackFont(vg_t* ctx, const char* baseFont, const char* fallbackFont)
 {
 	return nvgAddFallbackFontId(ctx, nvgFindFont(ctx, baseFont), nvgFindFont(ctx, fallbackFont));
 }
 
-void nvgResetFallbackFontsId(NVGcontext* ctx, int baseFont)
+void nvgResetFallbackFontsId(vg_t* ctx, int baseFont)
 {
 	fonsResetFallbackFont(ctx->fs, baseFont);
 }
 
-void nvgResetFallbackFonts(NVGcontext* ctx, const char* baseFont)
+void nvgResetFallbackFonts(vg_t* ctx, const char* baseFont)
 {
 	nvgResetFallbackFontsId(ctx, nvgFindFont(ctx, baseFont));
 }
 
 // State setting
-void nvgFontSize(NVGcontext* ctx, float size)
+void nvgFontSize(vg_t* ctx, float size)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->fontSize = size;
 }
 
-void nvgFontBlur(NVGcontext* ctx, float blur)
+void nvgFontBlur(vg_t* ctx, float blur)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->fontBlur = blur;
 }
 
-void nvgTextLetterSpacing(NVGcontext* ctx, float spacing)
+void nvgTextLetterSpacing(vg_t* ctx, float spacing)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->letterSpacing = spacing;
 }
 
-void nvgTextLineHeight(NVGcontext* ctx, float lineHeight)
+void nvgTextLineHeight(vg_t* ctx, float lineHeight)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->lineHeight = lineHeight;
 }
 
-void nvgTextAlign(NVGcontext* ctx, int align)
+void nvgTextAlign(vg_t* ctx, int align)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->textAlign = align;
 }
 
-void nvgFontFaceId(NVGcontext* ctx, int font)
+void nvgFontFaceId(vg_t* ctx, int font)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->fontId = font;
 }
 
-void nvgFontFace(NVGcontext* ctx, const char* font)
+void nvgFontFace(vg_t* ctx, const char* font)
 {
 	NVGstate* state = nvg__getState(ctx);
 	state->fontId = fonsGetFontByName(ctx->fs, font);
@@ -2388,7 +2397,7 @@ static float nvg__getFontScale(NVGstate* state)
 	return nvg__minf(nvg__quantize(nvg__getAverageScale(state->xform), 0.01f), 4.0f);
 }
 
-static void nvg__flushTextTexture(NVGcontext* ctx)
+static void nvg__flushTextTexture(vg_t* ctx)
 {
 	int dirty[4];
 
@@ -2407,7 +2416,7 @@ static void nvg__flushTextTexture(NVGcontext* ctx)
 	}
 }
 
-static int nvg__allocTextAtlas(NVGcontext* ctx)
+static int nvg__allocTextAtlas(vg_t* ctx)
 {
 	int iw, ih;
 	nvg__flushTextTexture(ctx);
@@ -2431,7 +2440,7 @@ static int nvg__allocTextAtlas(NVGcontext* ctx)
 	return 1;
 }
 
-static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
+static void nvg__renderText(vg_t* ctx, NVGvertex* verts, int nverts)
 {
 	NVGstate* state = nvg__getState(ctx);
 	NVGpaint paint = state->fill;
@@ -2449,7 +2458,7 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 	ctx->textTriCount += nverts/3;
 }
 
-float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char* end)
+float nvgText(vg_t* ctx, float x, float y, const char* string, const char* end)
 {
 	NVGstate* state = nvg__getState(ctx);
 	FONStextIter iter, prevIter;
@@ -2516,7 +2525,7 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 	return iter.nextx / scale;
 }
 
-void nvgTextBox(NVGcontext* ctx, float x, float y, float breakRowWidth, const char* string, const char* end)
+void nvgTextBox(vg_t* ctx, float x, float y, float breakRowWidth, const char* string, const char* end)
 {
 	NVGstate* state = nvg__getState(ctx);
 	NVGtextRow rows[2];
@@ -2549,7 +2558,7 @@ void nvgTextBox(NVGcontext* ctx, float x, float y, float breakRowWidth, const ch
 	state->textAlign = oldAlign;
 }
 
-int nvgTextGlyphPositions(NVGcontext* ctx, float x, float y, const char* string, const char* end, NVGglyphPosition* positions, int maxPositions)
+int nvgTextGlyphPositions(vg_t* ctx, float x, float y, const char* string, const char* end, NVGglyphPosition* positions, int maxPositions)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
@@ -2599,7 +2608,7 @@ enum NVGcodepointType {
 	NVG_CJK_CHAR,
 };
 
-int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, float breakRowWidth, NVGtextRow* rows, int maxRows)
+int nvgTextBreakLines(vg_t* ctx, const char* string, const char* end, float breakRowWidth, NVGtextRow* rows, int maxRows)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
@@ -2805,7 +2814,7 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 	return nrows;
 }
 
-float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float* bounds)
+float nvgTextBounds(vg_t* ctx, float x, float y, const char* string, const char* end, float* bounds)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
@@ -2832,7 +2841,7 @@ float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const
 	return width * invscale;
 }
 
-void nvgTextBoxBounds(NVGcontext* ctx, float x, float y, float breakRowWidth, const char* string, const char* end, float* bounds)
+void nvgTextBoxBounds(vg_t* ctx, float x, float y, float breakRowWidth, const char* string, const char* end, float* bounds)
 {
 	NVGstate* state = nvg__getState(ctx);
 	NVGtextRow rows[2];
@@ -2901,7 +2910,7 @@ void nvgTextBoxBounds(NVGcontext* ctx, float x, float y, float breakRowWidth, co
 	}
 }
 
-void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* lineh)
+void nvgTextMetrics(vg_t* ctx, float* ascender, float* descender, float* lineh)
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;

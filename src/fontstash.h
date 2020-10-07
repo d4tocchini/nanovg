@@ -170,6 +170,7 @@ int fons__tt_init(FONScontext *context)
 	ftError = FT_Init_FreeType(&ftLibrary);
 
 	// https://www.freetype.org/freetype2/docs/reference/ft2-lcd_rendering.html#ft_library_setlcdfilter
+	// https://www.freetype.org/freetype2/docs/text-rendering-general.html
 	//  FT_LCD_FILTER_LIGHT
 	// if (FT_Library_SetLcdFilter(ftLibrary, FT_LCD_FILTER_DEFAULT) != 0) {
 	// 	#ifdef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
@@ -295,7 +296,8 @@ static void* fons__tmpalloc(size_t size, void* up);
 static void fons__tmpfree(void* ptr, void* up);
 #define STBTT_malloc(x,u)    fons__tmpalloc(x,u)
 #define STBTT_free(x,u)      fons__tmpfree(x,u)
-#include "stb_truetype.h"
+
+#include STB_TRUETYPE__H
 
 struct FONSttFontImpl {
 	stbtt_fontinfo font;
