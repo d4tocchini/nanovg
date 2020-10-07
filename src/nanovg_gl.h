@@ -124,7 +124,11 @@ enum GLNVGshaderType {
 	NSVG_SHADER_FILLGRAD,
 	NSVG_SHADER_FILLIMG,
 	NSVG_SHADER_SIMPLE,
-	NSVG_SHADER_IMG
+	NSVG_SHADER_IMG,
+	NSVG_SHADER_FAST_FILLCOLOR = 5,
+	NSVG_SHADER_FAST_FILLIMG,
+	NSVG_SHADER_FILLCOLOR,
+  	NSVG_SHADER_FAST_FILLGLYPH
 };
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
@@ -244,7 +248,7 @@ struct GLNVGcontext {
 #endif
 	int fragSize;
 	int flags;
-
+	float g_xform[6];
 	// Per frame buffers
 	GLNVGcall* calls;
 	int ccalls;
@@ -561,6 +565,7 @@ static int glnvg__renderCreate(void* uptr)
 		"#endif\n"
 		"#endif\n"
 		"#ifdef NANOVG_GL3\n"
+		"#define TEXTURE(tex, ftcoord) texture(tex, ftcoord)\n"
 		"#ifdef USE_UNIFORMBUFFER\n"
 		"	layout(std140) uniform frag {\n"
 		"		mat3 scissorMat;\n"
@@ -585,6 +590,7 @@ static int glnvg__renderCreate(void* uptr)
 		"	in vec2 fpos;\n"
 		"	out vec4 outColor;\n"
 		"#else\n" // !NANOVG_GL3
+		"#define TEXTURE(tex, ftcoord) texture2D(tex, ftcoord)\n"
 		"	uniform vec4 frag[UNIFORMARRAY_SIZE];\n"
 		"	uniform sampler2D tex;\n"
 		"	varying vec2 ftcoord;\n"
@@ -618,56 +624,67 @@ static int glnvg__renderCreate(void* uptr)
 		"	sc = vec2(0.5,0.5) - sc * scissorScale;\n"
 		"	return clamp(sc.x,0.0,1.0) * clamp(sc.y,0.0,1.0);\n"
 		"}\n"
-		"#ifdef EDGE_AA\n"
 		"// Stroke - from [0..1] to clipped pyramid, where the slope is 1px.\n"
-		"float strokeMask() {\n"
-		"	return min(1.0, (1.0-abs(ftcoord.x*2.0-1.0))*strokeMult) * min(1.0, ftcoord.y);\n"
-		"}\n"
+		"#ifdef EDGE_AA\n" // float strokeMask()
+		"#define SET__strokeAlpha"
+		"	float strokeAlpha = min(1.0, (1.0-abs(ftcoord.x*2.0-1.0))*strokeMult) * min(1.0, ftcoord.y);"
+		"	if (strokeAlpha < strokeThr) discard;"
+		"\n"
+		"#else\n"
+		"#define SET__strokeAlpha"
+		"	float strokeAlpha = 1.0;"
+		"\n"
 		"#endif\n"
 		"\n"
 		"void main(void) {\n"
-		"   vec4 result;\n"
-		"	float scissor = scissorMask(fpos);\n"
-		"#ifdef EDGE_AA\n"
-		"	float strokeAlpha = strokeMask();\n"
-		"	if (strokeAlpha < strokeThr) discard;\n"
-		"#else\n"
-		"	float strokeAlpha = 1.0;\n"
-		"#endif\n"
-		"	if (type == 0) {			// Gradient\n"
+		"   vec4 result;\n" // "	float strokeAlpha;	float scissor = scissorMask(fpos);\n"
+		" 	if (type == 5) {    //fast fill color\n"
+		"   	result = innerCol;\n"
+		" 	} else if (type == 6) {   //fast fill image\n"
+		"   	SET__strokeAlpha\n"
+		"   	vec2 pt = (paintMat * vec3(fpos,1.0)).xy / extent;\n"
+		"   	vec4 color = TEXTURE(tex, pt);\n"
+		"   	if (texType == 1) color = vec4(color.xyz*color.w,color.w);"
+		"   	result = innerCol * color * strokeAlpha;\n"
+		" 	} else if(type == 7) {      // fill color\n"
+		"   	SET__strokeAlpha\n"
+		"   	vec4 color = innerCol;\n"
+		"   	color *= strokeAlpha * scissorMask(fpos);\n"
+		"   	result = color;\n"
+		" 	} else if (type == 8) {   // fast fill glyph\n"
+		"   	vec4 color = TEXTURE(tex, ftcoord);\n"
+		"   	if (color.x < 0.02) discard;\n"
+		"   	result = innerCol * color.x;\n"
+		" 	} else if (type == 0) {			// Gradient\n"
 		"		// Calculate gradient color using box gradient\n"
+		"   	SET__strokeAlpha\n"
 		"		vec2 pt = (paintMat * vec3(fpos,1.0)).xy;\n"
 		"		float d = clamp((sdroundrect(pt, extent, radius) + feather*0.5) / feather, 0.0, 1.0);\n"
 		"		vec4 color = mix(innerCol,outerCol,d);\n"
 		"		// Combine alpha\n"
-		"		color *= strokeAlpha * scissor;\n"
+		"		color *= strokeAlpha * scissorMask(fpos);\n"
 		"		result = color;\n"
 		"	} else if (type == 1) {		// Image\n"
+		"   	SET__strokeAlpha\n"
 		"		// Calculate color fron texture\n"
 		"		vec2 pt = (paintMat * vec3(fpos,1.0)).xy / extent;\n"
-		"#ifdef NANOVG_GL3\n"
-		"		vec4 color = texture(tex, pt);\n"
-		"#else\n"
-		"		vec4 color = texture2D(tex, pt);\n"
-		"#endif\n"
+		"		vec4 color = TEXTURE(tex, pt);\n"
 		"		if (texType == 1) color = vec4(color.xyz*color.w,color.w);"
 		"		if (texType == 2) color = vec4(color.x);"
 		"		// Apply color tint and alpha.\n"
 		"		color *= innerCol;\n"
 		"		// Combine alpha\n"
-		"		color *= strokeAlpha * scissor;\n"
+		"		color *= strokeAlpha * scissorMask(fpos);\n"
 		"		result = color;\n"
 		"	} else if (type == 2) {		// Stencil fill\n"
 		"		result = vec4(1,1,1,1);\n"
 		"	} else if (type == 3) {		// Textured tris\n"
-		"#ifdef NANOVG_GL3\n"
-		"		vec4 color = texture(tex, ftcoord);\n"
-		"#else\n"
-		"		vec4 color = texture2D(tex, ftcoord);\n"
-		"#endif\n"
+		"		vec4 color = TEXTURE(tex, ftcoord);\n"
+		"   	if (color.x < 0.02) discard;\n"
+		"   	SET__strokeAlpha\n"
 		"		if (texType == 1) color = vec4(color.xyz*color.w,color.w);"
 		"		if (texType == 2) color = vec4(color.x);"
-		"		color *= scissor;\n"
+		"		color *= scissorMask(fpos);\n"
 		"		result = color * innerCol;\n"
 		"	}\n"
 		"#ifdef NANOVG_GL3\n"
@@ -1353,9 +1370,74 @@ static void glnvg__vset(NVGvertex* vtx, float x, float y, float u, float v)
 	vtx->v = v;
 }
 
+static int glnvg__pathIsRect(const NVGpath* path)
+{
+  	if (path->nfill == 4) {
+		const NVGvertex* verts = path->fill;
+    	if (verts[0].y == verts[1].y &&
+			verts[1].x == verts[2].x &&
+			verts[2].y == verts[3].y &&
+            verts[3].x == verts[0].x)
+			return 1;
+    	if (verts[0].x == verts[1].x &&
+			verts[1].y == verts[2].y &&
+			verts[2].x == verts[3].x &&
+            verts[3].y == verts[0].y)
+			return 1;
+  	}
+  	return 0;
+}
+
+// support if coordinate system has not been rotated or scaled
+#define glnvg_CAN_DRAW_FAST(gl, scissor) \
+	(gl->g_xform[0] == 1.0f && gl->g_xform[1] == 0.0f && gl->g_xform[2] == 0.0f && gl->g_xform[3] == 1.0f && \
+		(/* If no previous scissor has been set */ 			\
+			scissor->extent[0] < 0 || 						\
+			(/* or scissor is not rotated or scaled */ 		\
+				scissor->xform[0] == 1.0f && scissor->xform[1] == 0.0f && scissor->xform[2] == 0.0f && scissor->xform[3] == 1.0f \
+			) 	\
+		) 		\
+	)			\
+
+#define glnvg__pathInScissor(path, scissor) \
+	glnvg__VertsInScissor(path->fill, path->nfill, scissor)
+
+static int glnvg__VertsInScissor(const NVGvertex* verts, int nr, NVGscissor* scissor)
+{
+	// If no previous scissor has been set, assume w/in Scissor
+	if (scissor->extent[0] < 0)
+		return 1;
+
+	int32_t i = 0;
+	float cx = scissor->xform[4];
+	float cy = scissor->xform[5];
+	float hw = scissor->extent[0];
+	float hh = scissor->extent[1];
+
+	float l = cx - hw;
+	float t = cy - hh;
+	float r = l + 2 * hw;
+	float b = t + 2 * hh;
+
+	//   printf("%f %f | %f %f \n",l,r,t,b);
+	for (i = 0; i < nr; i++) {
+		const NVGvertex* iter = verts + i;
+		float x = iter->x;
+		float y = iter->y;
+		// printf("	%f %f %f %f \n",x,y, iter->u, iter->v);
+		if (x < l || x > r || y < t || y > b)
+		return 0;
+	}
+
+	return 1;
+}
+
 static void glnvg__renderFill(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe,
 							  const float* bounds, const NVGpath* paths, int npaths)
 {
+	int support_fast_draw = 0;
+  	int is_gradient = memcmp(&(paint->innerColor), &(paint->outerColor), sizeof(paint->outerColor));
+
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGcall* call = glnvg__allocCall(gl);
 	NVGvertex* quad;
@@ -1383,6 +1465,7 @@ static void glnvg__renderFill(void* uptr, NVGpaint* paint, NVGcompositeOperation
 	offset = glnvg__allocVerts(gl, maxverts);
 	if (offset == -1) goto error;
 
+	// printf("npaths = %i \n",npaths);
 	for (i = 0; i < npaths; i++) {
 		GLNVGpath* copy = &gl->paths[call->pathOffset + i];
 		const NVGpath* path = &paths[i];
@@ -1399,6 +1482,14 @@ static void glnvg__renderFill(void* uptr, NVGpaint* paint, NVGcompositeOperation
 			memcpy(&gl->verts[offset], path->stroke, sizeof(NVGvertex) * path->nstroke);
 			offset += path->nstroke;
 		}
+	}
+
+	if (npaths == 1) {
+		const NVGpath* path = &paths[0];
+		// printf("glnvg__pathIsRect = %i \n",glnvg__pathIsRect(path));
+		// printf("glnvg__pathInScissor = %i \n",glnvg__pathInScissor(path, scissor));
+		// printf("glnvg_CAN_DRAW_FAST = %i \n",glnvg_CAN_DRAW_FAST(gl, scissor));
+		support_fast_draw = (path->nfill > 0) && glnvg_CAN_DRAW_FAST(gl, scissor) && glnvg__pathIsRect(path) && glnvg__pathInScissor(path, scissor);
 	}
 
 	// Setup uniforms for draw calls
@@ -1424,7 +1515,24 @@ static void glnvg__renderFill(void* uptr, NVGpaint* paint, NVGcompositeOperation
 		call->uniformOffset = glnvg__allocFragUniforms(gl, 1);
 		if (call->uniformOffset == -1) goto error;
 		// Fill shader
-		glnvg__convertPaint(gl, nvg__fragUniformPtr(gl, call->uniformOffset), paint, scissor, fringe, fringe, -1.0f);
+		frag = nvg__fragUniformPtr(gl, call->uniformOffset);
+		glnvg__convertPaint(gl, frag, paint, scissor, fringe, fringe, -1.0f);
+	}
+
+	// printf("\n support_fast_draw %i \n", support_fast_draw);
+	if (support_fast_draw) {
+		if (paint->image != 0) {
+			// printf("\n NSVG_SHADER_FAST_FILLIMG \n");
+			frag->type = NSVG_SHADER_FAST_FILLIMG;
+		} else if (!is_gradient) {
+			// printf("\n NSVG_SHADER_FAST_FILLCOLOR \n");
+			frag->type = NSVG_SHADER_FAST_FILLCOLOR;
+		}
+	} else {
+		if (paint->image == 0 && !is_gradient) {
+			// printf("\n NSVG_SHADER_FILLCOLOR \n");
+			frag->type = NSVG_SHADER_FILLCOLOR;
+		}
 	}
 
 	return;
@@ -1491,6 +1599,14 @@ error:
 	if (gl->ncalls > 0) gl->ncalls--;
 }
 
+static void glnvg__setStateXfrom(void* uptr, float* xform)
+{
+	GLNVGcontext* gl = (GLNVGcontext*)uptr;
+  	if(xform != NULL) {
+		memcpy(gl->g_xform, xform, sizeof(gl->g_xform));
+	}
+}
+
 static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor,
 								   const NVGvertex* verts, int nverts, float fringe)
 {
@@ -1516,8 +1632,11 @@ static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOper
 	if (call->uniformOffset == -1) goto error;
 	frag = nvg__fragUniformPtr(gl, call->uniformOffset);
 	glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, fringe, -1.0f);
-	frag->type = NSVG_SHADER_IMG;
 
+	if (glnvg_CAN_DRAW_FAST(gl, scissor) && glnvg__VertsInScissor(verts, nverts, scissor))
+		frag->type = NSVG_SHADER_FAST_FILLGLYPH;
+	else
+		frag->type = NSVG_SHADER_IMG;
 	return;
 
 error:
@@ -1589,6 +1708,7 @@ NVGcontext* nvgCreateGLES3(int flags)
 	params.renderStroke = glnvg__renderStroke;
 	params.renderTriangles = glnvg__renderTriangles;
 	params.renderDelete = glnvg__renderDelete;
+	params.setStateXfrom = glnvg__setStateXfrom;
 	params.userPtr = gl;
 	params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
 

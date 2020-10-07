@@ -2238,6 +2238,11 @@ void nvgFill(vg_t* ctx)
 	else
 		nvg__expandFill(ctx, 0.0f, NVG_MITER, 2.4f);
 
+	//
+	if (ctx->params.setStateXfrom != NULL) {
+		ctx->params.setStateXfrom(ctx->params.userPtr, state->xform);
+	}
+
 	// Apply global alpha
 	fillPaint.innerColor.a *= state->alpha;
 	fillPaint.outerColor.a *= state->alpha;
