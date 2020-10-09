@@ -19,7 +19,11 @@
 #ifndef NANOVG_H
 #define NANOVG_H
 
-#define VG_API
+#ifdef VG_EXTERN_API
+	#define VG_API extern
+#else
+	#define VG_API
+#endif
 
 #define STB_IMAGE__H 		"stb/stb_image.h"
 #define STB_IMAGE_WRITE__H 	"stb/stb_image_write.h"
@@ -272,15 +276,15 @@ enum NVGimageFlags {
 //
 // Frame
 //
-// Calls to nanovg drawing API should be wrapped in nvgBeginFrame() & nvgEndFrame()
-// nvgBeginFrame() defines the size of the window to render to in relation currently
+// Calls to nanovg drawing API should be wrapped in vg_frame_begin() & nvgEndFrame()
+// vg_frame_begin() defines the size of the window to render to in relation currently
 // set viewport (i.e. glViewport on GL backends). Device pixel ration allows to
 // control the rendering on Hi-DPI devices.
 // For example, GLFW returns two dimension for an opened window: window size and
 // frame buffer size. In that case you would set windowWidth/Height to the window size
 // devicePixelRatio to: frameBufferWidth / windowWidth.
 
-VG_API 	void nvgBeginFrame(vg_t* ctx, float windowWidth, float windowHeight, float devicePixelRatio);
+VG_API 	void vg_frame_begin(vg_t* ctx, float windowWidth, float windowHeight, float devicePixelRatio);
 VG_API 	void nvgCancelFrame(vg_t* ctx);
 VG_API 	void nvgEndFrame(vg_t* ctx);
 
@@ -716,70 +720,73 @@ VG_API	void nvgTextMetrics(vg_t* ctx, float* ascender, float* descender, float* 
 // Words longer than the max width are slit at nearest character (i.e. no hyphenation).
 VG_API	int nvgTextBreakLines(vg_t* ctx, const char* string, const char* end, float breakRowWidth, NVGtextRow* rows, int maxRows);
 
-//
-// Internal Render API
-//
-enum NVGtexture {
-	NVG_TEXTURE_ALPHA = 0x01,
-	NVG_TEXTURE_RGBA = 0x02,
-};
+#if !defined(VG_EXTERN_API)
 
-struct NVGscissor {
-	float xform[6];
-	float extent[2];
-};
-typedef struct NVGscissor NVGscissor;
+	//
+	// Internal Render API
+	//
+	enum NVGtexture {
+		NVG_TEXTURE_ALPHA = 0x01,
+		NVG_TEXTURE_RGBA = 0x02,
+	};
 
-struct NVGvertex {
-	float x,y,u,v;
-};
-typedef struct NVGvertex NVGvertex;
+	struct NVGscissor {
+		float xform[6];
+		float extent[2];
+	};
+	typedef struct NVGscissor NVGscissor;
 
-struct NVGpath {
-	int first;
-	int count;
-	unsigned char closed;
-	int nbevel;
-	NVGvertex* fill;
-	int nfill;
-	NVGvertex* stroke;
-	int nstroke;
-	int winding;
-	int convex;
-};
-typedef struct NVGpath NVGpath;
+	struct NVGvertex {
+		float x,y,u,v;
+	};
+	typedef struct NVGvertex NVGvertex;
 
-struct NVGparams {
-	void* userPtr;
-	int edgeAntiAlias;
-	int (*renderCreate)(void* uptr);
-	int (*renderCreateTexture)(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
-	int (*renderDeleteTexture)(void* uptr, int image);
-	int (*renderUpdateTexture)(void* uptr, int image, int x, int y, int w, int h, const unsigned char* data);
-	int (*renderGetTextureSize)(void* uptr, int image, int* w, int* h);
-	void (*renderViewport)(void* uptr, float width, float height, float devicePixelRatio);
-	void (*renderCancel)(void* uptr);
-	void (*renderFlush)(void* uptr);
-	void (*renderFill)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe, const float* bounds, const NVGpath* paths, int npaths);
-	void (*renderStroke)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe, float strokeWidth, const NVGpath* paths, int npaths);
-	void (*renderTriangles)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, const NVGvertex* verts, int nverts, float fringe);
-	void (*renderDelete)(void* uptr);
+	struct NVGpath {
+		int first;
+		int count;
+		unsigned char closed;
+		int nbevel;
+		NVGvertex* fill;
+		int nfill;
+		NVGvertex* stroke;
+		int nstroke;
+		int winding;
+		int convex;
+	};
+	typedef struct NVGpath NVGpath;
 
-	void (*setStateXfrom)(void* uptr, float* xform);
-};
-typedef struct NVGparams NVGparams;
+	struct NVGparams {
+		void* userPtr;
+		int edgeAntiAlias;
+		int (*renderCreate)(void* uptr);
+		int (*renderCreateTexture)(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
+		int (*renderDeleteTexture)(void* uptr, int image);
+		int (*renderUpdateTexture)(void* uptr, int image, int x, int y, int w, int h, const unsigned char* data);
+		int (*renderGetTextureSize)(void* uptr, int image, int* w, int* h);
+		void (*renderViewport)(void* uptr, float width, float height, float devicePixelRatio);
+		void (*renderCancel)(void* uptr);
+		void (*renderFlush)(void* uptr);
+		void (*renderFill)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe, const float* bounds, const NVGpath* paths, int npaths);
+		void (*renderStroke)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe, float strokeWidth, const NVGpath* paths, int npaths);
+		void (*renderTriangles)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, const NVGvertex* verts, int nverts, float fringe);
+		void (*renderDelete)(void* uptr);
 
-// Constructor and destructor, called by the render back-end.
-vg_t* nvgCreateInternal(NVGparams* params);
-void nvgDeleteInternal(vg_t* ctx);
+		void (*setStateXfrom)(void* uptr, float* xform);
+	};
+	typedef struct NVGparams NVGparams;
 
-NVGparams* nvgInternalParams(vg_t* ctx);
+	// Constructor and destructor, called by the render back-end.
+	vg_t* nvgCreateInternal(NVGparams* params);
+	void nvgDeleteInternal(vg_t* ctx);
 
-// Debug function to dump cached path data.
-void nvgDebugDumpPathCache(vg_t* ctx);
+	NVGparams* nvgInternalParams(vg_t* ctx);
 
-#ifdef _MSC_VER
-#pragma warning(pop)
+	// Debug function to dump cached path data.
+	void nvgDebugDumpPathCache(vg_t* ctx);
+
+	#ifdef _MSC_VER
+	#pragma warning(pop)
+	#endif
 #endif
 
 #define NVG_NOTUSED(v) for (;;) { (void)(1 ? (void)0 : ( (void)(v) ) ); break; }
