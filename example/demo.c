@@ -523,7 +523,9 @@ void drawSpinner(NVGcontext* vg, float cx, float cy, float r, float t)
 	nvgRestore(vg);
 }
 
-void drawThumbnails(NVGcontext* vg, float x, float y, float w, float h, const int* images, int nimages, float t)
+void drawThumbnails(NVGcontext* vg,
+	float x, float y, float w, float h,
+	const int* images, int nimages, float t)
 {
 	float cornerRadius = 3.0f;
 	NVGpaint shadowPaint, imgPaint, fadePaint;
@@ -674,7 +676,7 @@ void drawColorwheel(NVGcontext* vg, float x, float y, float w, float h, float t)
 		ay = cy + sinf(a0) * (r0+r1)*0.5f;
 		bx = cx + cosf(a1) * (r0+r1)*0.5f;
 		by = cy + sinf(a1) * (r0+r1)*0.5f;
-		paint = nvgLinearGradient(vg, ax,ay, bx,by, nvgHSLA(a0/(NVG_PI*2),1.0f,0.55f,255), nvgHSLA(a1/(NVG_PI*2),1.0f,0.55f,255));
+		paint = nvgLinearGradient(vg, ax,ay, bx,by, nvgHSLA(a0/(NVG_PI*2),1.0f,0.55f,1.0f), nvgHSLA(a1/(NVG_PI*2),1.0f,0.55f,1.0f));
 		nvgFillPaint(vg, paint);
 		nvgFill(vg);
 	}
@@ -717,7 +719,7 @@ void drawColorwheel(NVGcontext* vg, float x, float y, float w, float h, float t)
 	nvgLineTo(vg, ax,ay);
 	nvgLineTo(vg, bx,by);
 	nvgClosePath(vg);
-	paint = nvgLinearGradient(vg, r,0, ax,ay, nvgHSLA(hue,1.0f,0.5f,255), nvgRGBA(255,255,255,255));
+	paint = nvgLinearGradient(vg, r,0, ax,ay, nvgHSLA(hue,1.0f,0.5f,1.0f), nvgRGBA(255,255,255,255));
 	nvgFillPaint(vg, paint);
 	nvgFill(vg);
 	paint = nvgLinearGradient(vg, (r+ax)*0.5f,(0+ay)*0.5f, bx,by, nvgRGBA(0,0,0,0), nvgRGBA(0,0,0,255));

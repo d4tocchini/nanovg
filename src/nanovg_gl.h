@@ -66,11 +66,11 @@ GLuint nvglImageHandleGL2(NVGcontext* ctx, int image);
 
 #if defined NANOVG_GL3
 
-NVGcontext* nvgCreateGL3(int flags);
-void nvgDeleteGL3(NVGcontext* ctx);
+	NVGcontext* nvgCreateGL3(int flags);
+	void nvgDeleteGL3(NVGcontext* ctx);
 
-int nvglCreateImageFromHandleGL3(NVGcontext* ctx, GLuint textureId, int w, int h, int flags);
-GLuint nvglImageHandleGL3(NVGcontext* ctx, int image);
+	int nvglCreateImageFromHandleGL3(NVGcontext* ctx, GLuint textureId, int w, int h, int flags);
+	GLuint nvglImageHandleGL3(NVGcontext* ctx, int image);
 
 #endif
 
@@ -1039,6 +1039,7 @@ static void glnvg__fill(GLNVGcontext* gl, GLNVGcall* call)
 	int i, npaths = call->pathCount;
 
 	// Draw shapes
+	// TODO:
 	glEnable(GL_STENCIL_TEST);
 	glnvg__stencilMask(gl, 0xff);
 	glnvg__stencilFunc(gl, GL_ALWAYS, 0, 0xff);
@@ -1051,6 +1052,7 @@ static void glnvg__fill(GLNVGcontext* gl, GLNVGcall* call)
 	glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
 	glStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
 	glDisable(GL_CULL_FACE);
+	// TODO:
 	for (i = 0; i < npaths; i++)
 		glDrawArrays(GL_TRIANGLE_FAN, paths[i].fillOffset, paths[i].fillCount);
 	glEnable(GL_CULL_FACE);
@@ -1279,7 +1281,7 @@ static void glnvg__renderFlush(void* uptr)
 		glBindVertexArray(0);
 #endif
 		glDisable(GL_CULL_FACE);
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glUseProgram(0);
 		glnvg__bindTexture(gl, 0);
 	}

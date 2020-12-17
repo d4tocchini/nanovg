@@ -49,6 +49,13 @@
 #define NVG_COUNTOF(arr) (sizeof(arr) / sizeof(0[arr]))
 
 
+#define nvg__getState(ctx) \
+	(&ctx->states[ctx->nstates-1])
+	// static NVGstate* nvg__getState(vg_t* ctx)
+
+#define _vg_get_transform(ctx) \
+	((NVGstate)ctx->states[ctx->nstates-1]).xform
+
 enum NVGcommands {
 	NVG_MOVETO = 0,
 	NVG_LINETO = 1,
@@ -131,23 +138,23 @@ struct vg_t {
 	int textTriCount;
 };
 
-static float nvg__sqrtf(float a) { return sqrtf(a); }
-static float nvg__modf(float a, float b) { return fmodf(a, b); }
-static float nvg__sinf(float a) { return sinf(a); }
-static float nvg__cosf(float a) { return cosf(a); }
-static float nvg__tanf(float a) { return tanf(a); }
-static float nvg__atan2f(float a,float b) { return atan2f(a, b); }
-static float nvg__acosf(float a) { return acosf(a); }
+#define nvg__sqrtf 	sqrtf
+#define nvg__modf	fmodf
+#define nvg__sinf	sinf
+#define nvg__cosf	cosf
+#define nvg__tanf	tanf
+#define nvg__atan2f	atan2f
+#define nvg__acosf	acosf
 
-static int nvg__mini(int a, int b) { return a < b ? a : b; }
-static int nvg__maxi(int a, int b) { return a > b ? a : b; }
-static int nvg__clampi(int a, int mn, int mx) { return a < mn ? mn : (a > mx ? mx : a); }
-static float nvg__minf(float a, float b) { return a < b ? a : b; }
-static float nvg__maxf(float a, float b) { return a > b ? a : b; }
-static float nvg__absf(float a) { return a >= 0.0f ? a : -a; }
-static float nvg__signf(float a) { return a >= 0.0f ? 1.0f : -1.0f; }
-static float nvg__clampf(float a, float mn, float mx) { return a < mn ? mn : (a > mx ? mx : a); }
-static float nvg__cross(float dx0, float dy0, float dx1, float dy1) { return dx1*dy0 - dx0*dy1; }
+static inline int nvg__mini(int a, int b) { return a < b ? a : b; }
+static inline int nvg__maxi(int a, int b) { return a > b ? a : b; }
+static inline int nvg__clampi(int a, int mn, int mx) { return a < mn ? mn : (a > mx ? mx : a); }
+static inline float nvg__minf(float a, float b) { return a < b ? a : b; }
+static inline float nvg__maxf(float a, float b) { return a > b ? a : b; }
+static inline float nvg__absf(float a) { return a >= 0.0f ? a : -a; }
+static inline float nvg__signf(float a) { return a >= 0.0f ? 1.0f : -1.0f; }
+static inline float nvg__clampf(float a, float mn, float mx) { return a < mn ? mn : (a > mx ? mx : a); }
+static inline float nvg__cross(float dx0, float dy0, float dx1, float dy1) { return dx1*dy0 - dx0*dy1; }
 
 static float nvg__normalize(float *x, float* y)
 {
@@ -159,7 +166,6 @@ static float nvg__normalize(float *x, float* y)
 	}
 	return d;
 }
-
 
 static void nvg__deletePathCache(NVGpathCache* c)
 {
@@ -276,11 +282,6 @@ static NVGcompositeOperationState nvg__compositeOperationState(int op)
 	state.srcAlpha = sfactor;
 	state.dstAlpha = dfactor;
 	return state;
-}
-
-static NVGstate* nvg__getState(vg_t* ctx)
-{
-	return &ctx->states[ctx->nstates-1];
 }
 
 vg_t* nvgCreateInternal(NVGparams* params)
@@ -418,16 +419,6 @@ void nvgEndFrame(vg_t* ctx)
 	}
 }
 
-NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b)
-{
-	return nvgRGBA(r,g,b,255);
-}
-
-NVGcolor nvgRGBf(float r, float g, float b)
-{
-	return nvgRGBAf(r,g,b,1.0f);
-}
-
 NVGcolor nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
 	NVGcolor color;
@@ -478,11 +469,6 @@ NVGcolor nvgLerpRGBA(NVGcolor c0, NVGcolor c1, float u)
 	return cint;
 }
 
-NVGcolor nvgHSL(float h, float s, float l)
-{
-	return nvgHSLA(h,s,l,255);
-}
-
 static float nvg__hue(float h, float m1, float m2)
 {
 	if (h < 0) h += 1;
@@ -496,7 +482,7 @@ static float nvg__hue(float h, float m1, float m2)
 	return m1;
 }
 
-NVGcolor nvgHSLA(float h, float s, float l, unsigned char a)
+NVGcolor nvgHSLA(float h, float s, float l, float a)
 {
 	float m1, m2;
 	NVGcolor col;
@@ -509,7 +495,7 @@ NVGcolor nvgHSLA(float h, float s, float l, unsigned char a)
 	col.r = nvg__clampf(nvg__hue(h + 1.0f/3.0f, m1, m2), 0.0f, 1.0f);
 	col.g = nvg__clampf(nvg__hue(h, m1, m2), 0.0f, 1.0f);
 	col.b = nvg__clampf(nvg__hue(h - 1.0f/3.0f, m1, m2), 0.0f, 1.0f);
-	col.a = a/255.0f;
+	col.a = a;
 	return col;
 }
 
@@ -598,16 +584,6 @@ void nvgTransformPoint(float* dx, float* dy, const float* t, float sx, float sy)
 {
 	*dx = sx*t[0] + sy*t[2] + t[4];
 	*dy = sx*t[1] + sy*t[3] + t[5];
-}
-
-float nvgDegToRad(float deg)
-{
-	return deg / 180.0f * NVG_PI;
-}
-
-float nvgRadToDeg(float rad)
-{
-	return rad / NVG_PI * 180.0f;
 }
 
 static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
@@ -1205,20 +1181,6 @@ static void nvg__addPoint(vg_t* ctx, float x, float y, int flags)
 	path->count++;
 }
 
-static void nvg__closePath(vg_t* ctx)
-{
-	NVGpath* path = nvg__lastPath(ctx);
-	if (path == NULL) return;
-	path->closed = 1;
-}
-
-static void nvg__pathWinding(vg_t* ctx, int winding)
-{
-	NVGpath* path = nvg__lastPath(ctx);
-	if (path == NULL) return;
-	path->winding = winding;
-}
-
 static float nvg__getAverageScale(float *t)
 {
 	float sx = sqrtf(t[0]*t[0] + t[2]*t[2]);
@@ -1327,6 +1289,21 @@ static void nvg__tesselateBezier(vg_t* ctx,
 	nvg__tesselateBezier(ctx, x1234,y1234, x234,y234, x34,y34, x4,y4, level+1, type);
 }
 
+static void nvg__closePath(vg_t* ctx)
+{
+	NVGpath* path = nvg__lastPath(ctx);
+	if (path == NULL) return;
+	path->closed = 1;
+}
+
+static void nvg__pathWinding(vg_t* ctx, int winding)
+{
+	NVGpath* path = nvg__lastPath(ctx);
+	if (path == NULL) return;
+	path->winding = winding;
+}
+
+// nvg__flattenPaths converts curves into line segments, which are later turned into triangles for rendering
 static void nvg__flattenPaths(vg_t* ctx)
 {
 	NVGpathCache* cache = ctx->cache;
@@ -1987,6 +1964,18 @@ void nvgMoveTo(vg_t* ctx, float x, float y)
 void nvgLineTo(vg_t* ctx, float x, float y)
 {
 	float vals[] = { NVG_LINETO, x, y };
+	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
+}
+
+void vg_hlineto(vg_t* ctx, float x)
+{
+	float vals[] = { NVG_LINETO, x, ctx->commandy };
+	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
+}
+
+void vg_vlineto(vg_t* ctx, float y)
+{
+	float vals[] = { NVG_LINETO, ctx->commandx, y };
 	nvg__appendCommands(ctx, vals, NVG_COUNTOF(vals));
 }
 

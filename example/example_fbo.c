@@ -222,7 +222,7 @@ int main()
 			for (i = 0; i < 20; i++) {
 				nvgBeginPath(vg);
 				nvgRect(vg, 10 + i*30,10, 10, winHeight-20);
-				nvgFillColor(vg, nvgHSLA(i/19.0f, 0.5f, 0.5f, 255));
+				nvgFillColor(vg, nvgHSLA(i/19.0f, 0.5f, 0.5f, 1.0f));
 				nvgFill(vg);
 			}
 

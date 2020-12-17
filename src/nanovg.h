@@ -1,23 +1,165 @@
-//
-// Copyright (c) 2013 Mikko Mononen memon@inside.org
-//
-// This software is provided 'as-is', without any express or implied
-// warranty.  In no event will the authors be held liable for any damages
-// arising from the use of this software.
-// Permission is granted to anyone to use this software for any purpose,
-// including commercial applications, and to alter it and redistribute it
-// freely, subject to the following restrictions:
-// 1. The origin of this software must not be misrepresented; you must not
-//    claim that you wrote the original software. If you use this software
-//    in a product, an acknowledgment in the product documentation would be
-//    appreciated but is not required.
-// 2. Altered source versions must be plainly marked as such, and must not be
-//    misrepresented as being the original software.
-// 3. This notice may not be removed or altered from any source distribution.
-//
-
 #ifndef NANOVG_H
 #define NANOVG_H
+
+/*
+
+## Other libs
+
+vg-renderer https://github.com/jdryg/vg-renderer
+	A vector graphics renderer for bgfx, based on ideas from NanoVG and ImDrawList (Dear ImGUI)
+styluslabs/nanovgXC https://github.com/styluslabs/nanovgXC
+	Lightweight vector graphics library implementing exact-coverage antialiasing in OpenGL
+natinusala/switch-nanovg https://github.com/natinusala/switch-nanovg
+	Nintendo Switch nanovg "port"
+Adubbz/nanovg-deko3d
+	A port of NanoVG to the deko3d low level graphics API for the Nintendo Switch
+retronx-team/nanovg-hybrid
+	Hybrid nanovg example for Switch and PC
+egslava/android-nanovg-sample
+	The example of integration of nano-vg library to Android projects
+Ported to OpenGL 4.5
+	https://github.com/sopyer/Infinity/commit/798a40da743811550a5c7d55b84be0c2b4f317aa#diff-af37a452339ac48c1dcd37cee0d0f266e58e169ad90721777ce61680c0dff5aa
+satoren/vkNanoVG
+	Vulkan port for nanovg
+	4, Updated on Aug 19, 2017
+## AA
+
+The AA in nanovg works so that first the solid (non-AA) part of the shape is drawn, creating a stencil mask of the fill of the shape. Then the solid shape is filled using a quad. Finally, the stencil test is inverted, and an antialiased line is drawn around the perimeter (since AA-line drawing is iffy, this line is created as a triangle strip). The stencil mask is also used to handle the fill rule of the shape so that you can have holes.
+
+The NVG_STENCIL_STROKES works similarly, but avoids the fill pass by drawing the solid shape and filling in the same pass. Essentially it uses the stencil buffer to only draw once at a given location. On the perimeter pass the stencil test is inverted and the AA edge of the stroke is drawn. The stroke geometry is build so that one segment of the path contains two triangles. The strokeThr is calculated so that it culls out the AA portion of the stroke during the solid pass.
+
+That means that with both methods, the AA edge (I call it AA-fringe) can be slightly wrong, as it will be overdrawn in case the shape intersects or overaps. You can see this sometimes especially with light colors, but generally it works well. You can also configure NanoVG to not generate any of the AA fringes and set your frame buffer to use multisampling AA (i.e. MSAA) if correct coverage is required.
+
+for filled shapes, we first need to inset the path by 0.5px and then add the 1px gradient, so that the shapes will not get thicker. Actually, the problem you're seeing can come from the path inset.
+You can also use nanovg with MSAA, in that case the problem does not exists.
+-> In WebGL you can initialize the context (`getContext´) with AA support, see WebGLContextAttributes.
+
+
+## Images
+
+The image is defined as pattern. It has origin and size (and rotation). When you draw a shape using the image pattern, only the pixels will be drawn which are visible "through" the shape.
+NanoVG assumes RGBA premultipled alpha images. If your textures are in funky format, one option is to first draw them into an RGBA8 FBO using your own pixel shader and then use them as image pattern.
+If the image was loaded using nvgCreateImage() then I recommend to flip the Y texture coordinate. If the texture comes from outside nanovg using nvglCreateImageFromHandleGL2()you should use the flip-y flag.
+nvgImagePattern() defines image pattern, as the name implies :) The origin (ox,oy) defines where the image is placed in the space, and size (w,h) defines the size of the (potentially repeating) pattern. Then the shapes you draw will "reveal" parts of this pattern.
+
+Little illustration
+
+image pattern
+(ox,oy)
+  +........+
+  :    ____:__
+  :   /    :   \
+  :   |    :   |
+  +........+ (w,h)
+      |        |
+      \________/
+      shape
+
+https://github.com/memononen/nanovg/issues/489
+I am creating the FBO on my own, and drawing to it without NanoVG. I want to take that FBO and draw it to my scene WITH NanoVG.
+In my line where I declare the integer nanoImage. I supplied the FBO id to the nvglCreateImageFromHandle method. The appropriate way is to supply the texture id instead.
+nvglCreateImageFromHandle
+
+Expected behavior of nvgImagePattern() with FBO? #251 https://github.com/memononen/nanovg/issues/251
+		fb = nvgluCreateFramebuffer(...)
+		... begin frame ... end frame
+		.. nvgImagePattern(nvg, 50, 50, 32, 32, 0, fb.memory.image, 1.0) ...
+
+Working with nvgScale. How to realize culling or clipping? #350 https://github.com/memononen/nanovg/issues/350
+
+	nvgSave saves the current state (transformation, scissor, color, etc), and nvgRestore allows you to go back to the previous state. Scissor allows you to specify a rectangular region, everything outside the region will not be drawn.
+	But the library does not do any culling. If you do big scaling (or in general too), you should do coarse culling yourself. I.e. check if their bounding box fits into the viewport.
+
+TODO:
+* nvgUpdateSubImage #474 https://github.com/memononen/nanovg/issues/474
+* support GL_NV_draw_texture extension on NVIDIA GPUs #187
+
+
+## Perf
+
+`nvgEndFrame` is where the data is sent to gpu for rendering (may see bottleneck here)
+
+for huge amount of geometry, I think the only way to speed that up is to reduce the amount of data that is passed to the GPU each frame. In practice it means to render as as you can to textures and then just draw rectangles. Things like those wires would be rendered using nvg on top.
+One option for example could be to draw each module to a texture. Maybe a module could have a texture, which is updated when user interacts with the UI (i.e. not every frame), and then some elements (i.e. blinking leds, things that animate each frame) would be drawn on top.
+Alternatively you could cache at component level too. It might require some testing to see what is the right spot for caching. Anyways, rendering to textures is the way to speed things up here.
+
+How to improve performance on Android/iOS device #212 https://github.com/memononen/nanovg/issues/212
+Very great library, but the render not very smooth when on android/iOS device(already remove NVG_STENCIL_STROKES | NVG_ANTIALIAS flags), so, how to improve the performance?
+
+(Lots of svg icon renders) Optimization #408 https://github.com/memononen/nanovg/issues/408
+
+SUGGESTION: Performance hit from storing textures in an array. (VCVRack) #451 https://github.com/memononen/nanovg/issues/451
+	The immediate low hanging fruit was glnvg__findTexture. This turned up at the top of the CPU usage for VCVRack in profiling.
+	The problem is that findTexture uses a sequential search through the texture array to find a texture based on ID. VCVRack uses a large number of textures, and glnvg__findTexture was being called hundreds (if not thousands) of times on every GUI [draw.]([url](url
+	As a proof of concept, I used a C++ STL map to store textures; this took findTexture off the top of the CPU usage list and buried it far down the list.
+	Instead of using an incrementing counter for the ID of textures, have the texture ID be the index into the textures array. When allocating, search for an empty texture in the array, and if there is none, do the realloc thing to allocate a new one.
+	Then findTexture becomes trivial, since if you have the textureID you simply dereference the array with it.
+	Deleting a texture would work exactly the same as it does now.
+	The only problem I see is that a program that mistakenly keeps the IDs around for deleted textures. In that case the wrong texture would be returned instead of NULL.
+	The alternative would be to use a data structure in C with better search characteristics, and preserve the same method of generating texture IDs.
+
+
+https://github.com/VCVRack/Rack/issues/629
+	A screenshot confirming that indeed one of the larger chunks of processing goes to the nanovg calls:
+		~17% for nvgEndFrame and its children (highlighted)
+
+
+Performances and display lists #371 https://github.com/memononen/nanovg/issues/451
+	almost 50% of all the calls are from drawing and calculation functions
+
+	Display list are still a thing if your performance problems are CPU bound. They will help if you render the same shape over multiple frames and you want to only apply affine transforms to them (Note: heavy scaling will be noticeable, as edges become blurry due to scaling up the aa fringe, and you might see the tessellation error). However, if you have lots of dynamic shapes that change each frame, display lists will not help at all as you still need to tesselate the shape again and again. On a side note, if you want to render the same static shape multiple time in the same frame (as you often do in 2d tile-based games), the shape will be transferred multiple times to the GPU which is costly, too. For this use case it’s a good idea to render the shape to a bitmap and then draw the bitmap multiple times. You can check out my attempt on display lists in my fork of this project.
+
+	Regarding lower performance devices, I did some optimizations to improve rendering performance on older iOS devices (iPad 3 generation). These devices especially have poor pixel shader performance; not sure what the problem is with raspberries, though. Here are some things you might try to improve GPU performance
+
+	Spit the Übershader into multiple smaller shaders. nanovg uses a single shader which has multiple branches for different tasks, splitting that into separated shaders and switch shaders between draw calls helped a lot for me.
+
+	Scissoring. nanovg does scissoring right in the pixel shader, the advantage is, that scissor rects do not have to be axis-aligned. However, removing this code from the shader and just using glScissor did help performance in my use-case (drawback: you have to get along with axis-aligned clipping, which was fine for me).
+
+	In my app I’m drawing mainly axis-aligned rectangle (for a UI system), for this the whole nanovg tessellation is kind of overkill. So I added support for drawing simple rectangles, that will just boil down to two triangles (no anti-aliasing) and a solid color (or textured) pixel shader. However, nanovg will still create a draw call for each of these rectangles - so there is room for improvement here.
+
+	A new project on GitHub appeared, that addresses these issues by basically re-implementing most of nanovg. It’s not finished yet, but looks very promising and you might want to keep an eye on it. https://github.com/jdryg/vg-renderer
+
+glGetError kills performance on some platforms (#150) https://github.com/memononen/nanovg/search?p=2&q=webgl&type=issues
+
+nanovg is super slow on iPad 2/iPad 3/iPhone 4s #188 https://github.com/memononen/nanovg/issues/188
+!!! These devices are dead now and doesn't matter anymore. The performance of newer iOS devices came with Apple A7 CPU or later are working fine.
+	....
+	You could try splitting the fragment shader into multiple ones to see if that helps. Instead of having one shader in GLNVGcontextyou'll have array of them, one for each type. And then you'll need to call glnvg__createShader() for each of the shaders. Vertex shader is always the same, but fragment shader changes.
+	...
+	In Loom we have experimented with disabling stencil and other expensive rendering features like AA in NanoVG. Most scenes render fine without them and it can be many times faster. We've also tweaked the shader a little bit. We also have initial render texture support in our latest unstable (firehose) build which can be a major speedup depending on your use case.
+	...
+	Have you experimented splitting the shader into smaller ones? On desktop one shader is way faster but maybe on mobile multiple smaller ones is better.
+	...
+	Poor performance on iOS is mainly due to the discard in the fragment shader. Here's a fix, but you'll need to live without NVG_STENCIL_STROKES
+		https://github.com/wtholliday/nanovg/commit/f1a235ae4b6382593871de858e904e200e91c59c
+---> 	removing discard from the fragment shader significantly improves performance on iOS #214 https://github.com/memononen/nanovg/issues/214
+			Since the discard is only on the EDGE_AA path, I would not use the NVG_ANTIALIAS if you want performance.
+			Turning off NVG_STENCIL_STROKES gets rid of the artifacts, but of course then self-intersecting paths are drawn differently (which I can live with).
+				Good catch! I wonder if splitting the shaders would make it faster on mobile too? So that if one shader uses discard, all shaders don't pay the penalty?
+				The idea of the discard is that we first draw the "fill" of the stroke, but only once, and then on second pass we draw the AA bit of the stroke. It either needs two sets of geometry, or discard/alphatest. I chose to use discard.
+			 it seems like the discard isn't needed when NVG_STENCIL_STROKES is off, right?
+
+
+
+
+## Path Mask
+
+Support for clipping paths #112 https://github.com/memononen/nanovg/issues/112
+	you can try to do this:
+	1. first, render your ready-to-clipped-graph to a FBO texture.
+	2. then, using this FBO texture as nvgImagePattern, and draw the clip path.
+	3. now the graph is looked just like "clipped" by the path.
+
+	I need this too. May be stencil buffer can be used instead of render to separate FBO? At least without AA.
+
+
+
+## WASM
+
+TODO:
+* Provide a NANOVG_NO_STDIO define to compile without stdio function calls #152 https://github.com/memononen/nanovg/issues/152
+
+*/
 
 #ifdef VG_EXTERN_API
 	#define VG_API extern
@@ -34,6 +176,8 @@ extern "C" {
 #endif
 
 #define NVG_PI 3.14159265358979323846264338327f
+#define nvgDegToRad(deg_f) ((deg_f) / 180.0f * NVG_PI)
+#define nvgRadToDeg(rad_f) ((rad_f) / NVG_PI * 180.0f)
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -63,6 +207,7 @@ typedef struct vg_t 			vg_t;
 
 //
 // Color
+// Colors are stored as unsigned ints in ABGR format.
 //
 #define	NVGcolor				vg_color_t
 typedef struct vg_color_t 		vg_color_t;
@@ -74,6 +219,10 @@ struct vg_color_t {
 		};
 	};
 };
+
+#define vg_rgb(r,g,b)			vg_rgba(r,g,b,255)
+#define vg_rgb_f(r,g,b)			vg_rgba_f(r,g,b,1.0f)
+#define vg_hsl(h,s,l)			vg_hsla(h,s,l,1.0f)
 #define nvgRGB					vg_rgb
 #define nvgRGBA					vg_rgba
 #define nvgRGBf					vg_rgb_f
@@ -83,6 +232,14 @@ struct vg_color_t {
 #define nvgTransRGBA			vg_color_alpha
 #define nvgTransRGBAf			vg_color_alpha_f
 #define nvgLerpRGBA				vg_color_mix
+VG_API 	vg_color_t vg_rgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+VG_API 	vg_color_t vg_rgba_f(float r, float g, float b, float a);
+VG_API 	vg_color_t vg_hsla(float h, float s, float l, float a); // float h,s,l , int8 a
+		// Sets transparency of a color value.
+VG_API 	vg_color_t nvgTransRGBA(vg_color_t c0, unsigned char a);
+VG_API 	vg_color_t nvgTransRGBAf(vg_color_t c0, float a);
+		// Linearly interpolates from color c0 to c1, and returns resulting color value.
+VG_API 	vg_color_t nvgLerpRGBA(vg_color_t c0, vg_color_t c1, float u);
 
 //
 // Paints
@@ -115,7 +272,7 @@ enum vg_line_cap_t {
 	NVG_MITER,
 };
 #define nvgShapeAntiAlias		vg_aa
-#define nvgStrokeColo			vg_stroke_color
+#define nvgStrokeColor			vg_stroke_color
 #define nvgStrokePaint			vg_stroke_paint
 #define nvgFillColor			vg_fill_color
 #define nvgFillPaint			vg_fill_paint
@@ -124,6 +281,30 @@ enum vg_line_cap_t {
 #define nvgLineCap				vg_line_cap
 #define nvgLineJoin				vg_line_join
 #define nvgGlobalAlpha			vg_global_alpha
+
+//
+// Transforms
+//
+#define nvgResetTransform 		vg_tf_reset
+#define nvgTranslate			vg_tf_translate
+#define nvgScale				vg_tf_scale
+#define nvgRotate				vg_tf_rotate
+#define nvgSkewX				vg_tf_skewx
+#define nvgSkewY				vg_tf_skewy
+#define nvgTransform			vg_tf_matrix
+
+// calculations on 2x3 transformation matrices, represented as float[6]
+#define nvgCurrentTransform		vg_mat23_get
+#define nvgTransformIdentity	vg_mat23_identity
+#define nvgTransformTranslate	vg_mat23_translate
+#define nvgTransformScale		vg_mat23_scale
+#define nvgTransformRotate		vg_mat23_rotate
+#define nvgTransformSkewX		vg_mat23_skewx
+#define nvgTransformSkewY		vg_mat23_skewy
+#define nvgTransformMultiply	vg_mat23_multiply
+#define nvgTransformPremultiply vg_mat23_premultiply
+#define nvgTransformInverse		vg_mat23_inverse
+#define nvgTransformPoint		vg_mat23_point
 
 //
 // Paths
@@ -136,6 +317,8 @@ enum vg_line_cap_t {
 #define nvgBezierTo				vg_bezto
 #define nvgQuadTo				vg_qbezto
 #define nvgArcTo				vg_arcto
+void vg_vlineto(vg_t* ctx, float y);
+void vg_hlineto(vg_t* ctx, float x);
 //
 #define nvgRect					vg_rect
 #define nvgRoundedRect			vg_rrect
@@ -258,6 +441,7 @@ typedef struct NVGcompositeOperationState NVGcompositeOperationState;
 //
 // Images
 //
+// vg_img_flags
 enum NVGimageFlags {
     NVG_IMAGE_GENERATE_MIPMAPS	= 1<<0,     // Generate mipmaps during creation of the image.
 	NVG_IMAGE_REPEATX			= 1<<1,		// Repeat image in X direction.
@@ -268,6 +452,7 @@ enum NVGimageFlags {
 };
 #define nvgCreateImage          vg_img_create
 #define nvgCreateImageRGBA      vg_img_from
+// #define nvgCreateImageMem
 #define nvgUpdateImage          vg_img_update
 #define nvgImageSize            vg_img_size
 #define nvgDeleteImage			vg_img_free
@@ -302,25 +487,7 @@ VG_API 	void nvgGlobalCompositeOperation(vg_t* ctx, int op);
 VG_API 	void nvgGlobalCompositeBlendFunc(vg_t* ctx, int sfactor, int dfactor);
 VG_API 	void nvgGlobalCompositeBlendFuncSeparate(vg_t* ctx, int srcRGB, int dstRGB, int srcAlpha, int dstAlpha);
 
-//
-// Color utils
-//
-// Colors in NanoVG are stored as unsigned ints in ABGR format.
 
-		// int8 r,g,b,a
-VG_API 	vg_color_t nvgRGB(unsigned char r, unsigned char g, unsigned char b); // a = 255
-VG_API 	vg_color_t nvgRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
-		// float r,g,b,a
-VG_API 	vg_color_t nvgRGBf(float r, float g, float b); // a = 1.0f
-VG_API 	vg_color_t nvgRGBAf(float r, float g, float b, float a);
-		// float h,s,l , int8 a
-VG_API 	vg_color_t nvgHSL(float h, float s, float l); // a = 255
-VG_API 	vg_color_t nvgHSLA(float h, float s, float l, unsigned char a);
-		// Sets transparency of a color value.
-VG_API 	vg_color_t nvgTransRGBA(vg_color_t c0, unsigned char a);
-VG_API 	vg_color_t nvgTransRGBAf(vg_color_t c0, float a);
-		// Linearly interpolates from color c0 to c1, and returns resulting color value.
-VG_API 	vg_color_t nvgLerpRGBA(vg_color_t c0, vg_color_t c1, float u);
 
 
 //
@@ -333,6 +500,8 @@ VG_API 	vg_color_t nvgLerpRGBA(vg_color_t c0, vg_color_t c1, float u);
 //		* scissor clipping.
 
 		// Pushes and saves the current render state onto stack. (matching nvgRestore() must be used to restore the state)
+		// nvgSave saves the current state (transformation, scissor, color, etc), and nvgRestore allows you to go back to the previous state. Scissor allows you to specify a rectangular region, everything outside the region will not be drawn.
+		// But the library does not do any culling. If you do big scaling (or in general too), you should do coarse culling yourself. I.e. check if their bounding box fits into the viewport.
 VG_API	void nvgSave(vg_t* ctx);
 		// Pops and restores current render state.
 VG_API	void nvgRestore(vg_t* ctx);
@@ -454,9 +623,6 @@ VG_API	int nvgTransformInverse(float* dst, const float* src);
 // Transform a point by given transform.
 VG_API	void nvgTransformPoint(float* dstx, float* dsty, const float* xform, float srcx, float srcy);
 
-// Converts degrees to radians and vice versa.
-VG_API	float nvgDegToRad(float deg);
-VG_API	float nvgRadToDeg(float rad);
 
 //
 // Images
@@ -512,7 +678,7 @@ VG_API	NVGpaint nvgBoxGradient(vg_t* ctx, float x, float y, float w, float h,
 VG_API	NVGpaint nvgRadialGradient(vg_t* ctx, float cx, float cy, float inr, float outr,
 						   vg_color_t icol, vg_color_t ocol);
 
-// Creates and returns an image patter. Parameters (ox,oy) specify the left-top location of the image pattern,
+// Creates and returns an image pattern. Parameters (ox,oy) specify the left-top location of the image pattern,
 // (ex,ey) the size of one image, angle rotation around the top-left corner, image is handle to the image to render.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 VG_API	NVGpaint nvgImagePattern(vg_t* ctx, float ox, float oy, float ex, float ey,
@@ -683,7 +849,7 @@ VG_API	void nvgFontFace(vg_t* ctx, const char* font);
 VG_API	void nvgTextLetterSpacing(vg_t* ctx, float spacing);
 
 // Sets the proportional line height of current text style. The line height is specified as multiple of font size.
-VG_API	void 	nvgTextLineHeight(vg_t* ctx, float lineHeight);
+VG_API	void nvgTextLineHeight(vg_t* ctx, float lineHeight);
 
 // Sets the text align of current text style, see NVGalign for options.
 VG_API	void nvgTextAlign(vg_t* ctx, int align);
@@ -795,4 +961,24 @@ VG_API	int nvgTextBreakLines(vg_t* ctx, const char* string, const char* end, flo
 }
 #endif
 
+//
+// Copyright (c) 2013 Mikko Mononen memon@inside.org
+//
+// This software is provided 'as-is', without any express or implied
+// warranty.  In no event will the authors be held liable for any damages
+// arising from the use of this software.
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+// 1. The origin of this software must not be misrepresented; you must not
+//    claim that you wrote the original software. If you use this software
+//    in a product, an acknowledgment in the product documentation would be
+//    appreciated but is not required.
+// 2. Altered source versions must be plainly marked as such, and must not be
+//    misrepresented as being the original software.
+// 3. This notice may not be removed or altered from any source distribution.
+//
+
 #endif // NANOVG_H
+
+
