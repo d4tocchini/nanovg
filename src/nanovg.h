@@ -519,14 +519,14 @@ VG_API	void nvgReset(vg_t* ctx);
 
 		// Sets the transparency applied to all rendered shapes. (Already transparent paths will get proportionally more transparent)
 VG_API 	void nvgGlobalAlpha(vg_t* ctx, float alpha);
-		// Sets whether to draw antialias for nvgStroke() and nvgFill(). It's enabled by default.
+		// Sets whether to draw antialias for nvgStroke() and vg_fill(). It's enabled by default.
 VG_API	void nvgShapeAntiAlias(vg_t* ctx, int enabled);
 		// Sets current stroke style to solid color.
 VG_API 	void nvgStrokeColor(vg_t* ctx, vg_color_t color);
 		// Sets current stroke style to a paint, which can be a one of the gradients or a pattern.
 VG_API 	void nvgStrokePaint(vg_t* ctx, NVGpaint paint);
 		// Sets current fill style to solid color.
-VG_API 	void nvgFillColor(vg_t* ctx, vg_color_t color);
+VG_API 	void vg_fill_color(vg_t* ctx, vg_color_t color);
 		// Sets current fill style to a paint, which can be a one of the gradients or a pattern.
 VG_API 	void nvgFillPaint(vg_t* ctx, NVGpaint paint);
 		// Sets the miter limit of stroke style (controls when a sharp corner is beveled)
@@ -716,7 +716,7 @@ VG_API	void nvgResetScissor(vg_t* ctx);
 // winding and holes should have counter clockwise order. To specify winding of a path you can
 // call nvgPathWinding(). This is useful especially for the common shapes, which are drawn CCW.
 //
-// Finally you can fill the path using current fill style by calling nvgFill(), and stroke it
+// Finally you can fill the path using current fill style by calling vg_fill(), and stroke it
 // with current stroke style by calling nvgStroke().
 //
 // The curve segments and sub-paths are transformed by the current transform.
@@ -724,7 +724,7 @@ VG_API	void nvgResetScissor(vg_t* ctx);
 // SVG path commands: https://www.w3.org/TR/SVG/paths.html#PathDataLinetoCommands
 
 // Clears the current path and sub-paths.
-VG_API	void nvgBeginPath(vg_t* ctx);
+VG_API	void vg_path(vg_t* ctx);
 
 // Starts new sub-path with specified point as first point.
 VG_API	void nvgMoveTo(vg_t* ctx, float x, float y);
@@ -753,7 +753,7 @@ VG_API	void nvgPathWinding(vg_t* ctx, int dir);
 VG_API	void nvgArc(vg_t* ctx, float cx, float cy, float r, float a0, float a1, int dir);
 
 // Creates new rectangle shaped sub-path.
-VG_API	void nvgRect(vg_t* ctx, float x, float y, float w, float h);
+VG_API	void vg_rect(vg_t* ctx, float x, float y, float w, float h);
 
 // Creates new rounded rectangle shaped sub-path.
 VG_API	void nvgRoundedRect(vg_t* ctx, float x, float y, float w, float h, float r);
@@ -768,7 +768,7 @@ VG_API	void nvgEllipse(vg_t* ctx, float cx, float cy, float rx, float ry);
 VG_API	void nvgCircle(vg_t* ctx, float cx, float cy, float r);
 
 // Fills the current path with current fill style.
-VG_API	void nvgFill(vg_t* ctx);
+VG_API	void vg_fill(vg_t* ctx);
 
 // Fills the current path with current stroke style.
 VG_API	void nvgStroke(vg_t* ctx);
@@ -803,7 +803,7 @@ VG_API	void nvgStroke(vg_t* ctx);
 //		nvgTextBounds(vg, x,y, txt, NULL, bounds);
 //		nvgBeginPath(vg);
 //		nvgRoundedRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
-//		nvgFill(vg);
+//		vg_fill(vg);
 //
 // Note: currently only solid color fill is supported for text.
 
